@@ -29,7 +29,7 @@ before_deploy:
 deploy:
   provider: releases
   api_key: $GIT_TOKEN
-  file: app/build/outputs/apk/release/Cimoc.apk
+  file: app/build/outputs/apk/release/Cimoc*.apk
   on:
     repo: haleydu-test/Cimoc
     branch: release-tci
