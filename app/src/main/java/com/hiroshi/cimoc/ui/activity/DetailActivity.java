@@ -13,6 +13,7 @@ import android.view.MenuItem;
 import android.view.View;
 
 import com.facebook.imagepipeline.core.ImagePipelineFactory;
+import com.google.common.collect.Lists;
 import com.google.firebase.analytics.FirebaseAnalytics;
 import com.hiroshi.cimoc.App;
 import com.hiroshi.cimoc.R;
@@ -38,6 +39,8 @@ import java.util.List;
 import java.util.Set;
 
 import butterknife.OnClick;
+
+import static com.hiroshi.cimoc.utils.interpretationUtils.isReverseOrder;
 
 /**
  * Created by Hiroshi on 2016/7/2.
@@ -89,6 +92,8 @@ public class DetailActivity extends CoordinatorActivity implements DetailView {
         int source = getIntent().getIntExtra(Extra.EXTRA_SOURCE, -1);
         String cid = getIntent().getStringExtra(Extra.EXTRA_CID);
         mPresenter.load(id, source, cid);
+
+
     }
 
     @Override
@@ -320,6 +325,11 @@ public class DetailActivity extends CoordinatorActivity implements DetailView {
     @Override
     public void onChapterLoadSuccess(List<Chapter> list) {
         hideProgressBar();
+        if (mPresenter.getComic().getTitle() != null && mPresenter.getComic().getCover() != null) {
+            mDetailAdapter.clear();
+            mDetailAdapter.addAll(list);
+            mDetailAdapter.notifyDataSetChanged();
+        }
         if(App.getPreferenceManager().getBoolean(PreferenceManager.PREF_OTHER_FIREBASE_EVENT, true)) {
             Bundle bundle = new Bundle();
             bundle.putString(FirebaseAnalytics.Param.CONTENT, mPresenter.getComic().getTitle());
@@ -329,9 +339,29 @@ public class DetailActivity extends CoordinatorActivity implements DetailView {
             FirebaseAnalytics mFirebaseAnalytics = FirebaseAnalytics.getInstance(this);
             mFirebaseAnalytics.logEvent(FirebaseAnalytics.Event.VIEW_ITEM, bundle);
         }
-        if (mPresenter.getComic().getTitle() != null && mPresenter.getComic().getCover() != null) {
+    }
+
+    @Override
+    public void onPreLoadSuccess(List<Chapter> list, Comic comic) {
+        hideProgressBar();
+        if (isReverseOrder(comic)){
+            mDetailAdapter.addAll(Lists.reverse(list));
+        }else {
             mDetailAdapter.addAll(list);
         }
+        mDetailAdapter.setInfo(comic.getCover(), comic.getTitle(), comic.getAuthor(),
+                comic.getIntro(), comic.getFinish(), comic.getUpdate(), comic.getLast());
+
+        if (comic.getTitle() != null && comic.getCover() != null) {
+            mImagePipelineFactory = ImagePipelineFactoryBuilder.build(this, SourceManager.getInstance(this).getParser(comic.getSource()).getHeader(), false);
+            mDetailAdapter.setControllerSupplier(ControllerBuilderSupplierFactory.get(this, mImagePipelineFactory));
+
+            int resId = comic.getFavorite() != null ? R.drawable.ic_favorite_white_24dp : R.drawable.ic_favorite_border_white_24dp;
+            mActionButton.setImageResource(resId);
+            mActionButton.setVisibility(View.VISIBLE);
+            mActionButton2.setVisibility(View.VISIBLE);
+        }
+
     }
 
     @Override
@@ -347,6 +377,8 @@ public class DetailActivity extends CoordinatorActivity implements DetailView {
         }
         hideProgressBar();
         showSnackbar(R.string.common_parse_error);
+
+
     }
 
     private void increment() {

@@ -1,34 +1,25 @@
 package com.hiroshi.cimoc.source;
 
 import android.util.Base64;
-import android.util.Log;
-import android.util.Pair;
 
 import com.hiroshi.cimoc.model.Chapter;
 import com.hiroshi.cimoc.model.Comic;
 import com.hiroshi.cimoc.model.ImageUrl;
 import com.hiroshi.cimoc.model.Source;
-import com.hiroshi.cimoc.parser.MangaCategory;
 import com.hiroshi.cimoc.parser.MangaParser;
 import com.hiroshi.cimoc.parser.NodeIterator;
 import com.hiroshi.cimoc.parser.SearchIterator;
 import com.hiroshi.cimoc.parser.UrlFilter;
 import com.hiroshi.cimoc.soup.Node;
-import com.hiroshi.cimoc.ui.activity.ResultActivity;
 import com.hiroshi.cimoc.utils.DecryptionUtils;
-import com.hiroshi.cimoc.utils.LogUtil;
 import com.hiroshi.cimoc.utils.StringUtils;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 import okhttp3.Headers;
 import okhttp3.Request;
-
-import static com.hiroshi.cimoc.utils.DecryptionUtils.desDecrypt;
 
 /**
  * Created by Haleyd on 2020/8/7.
@@ -38,7 +29,7 @@ public class Ohmanhua extends MangaParser {
 
     public static final int TYPE = 71;
     public static final String DEFAULT_TITLE = "oh漫画";
-    public static final String baseUrl = "https://www.ohmanhua.com";
+    private static final String baseUrl = "https://www.ohmanhua.com";
     private static final String serverUrl = "https://img.ohmanhua.com/comic/";
 
     public Ohmanhua(Source source) {
@@ -50,7 +41,7 @@ public class Ohmanhua extends MangaParser {
     }
 
     @Override
-    public Request getSearchRequest(String keyword, int page) throws UnsupportedEncodingException {
+    public Request getSearchRequest(String keyword, int page) {
         String url = "";
         if (page == 1) {
             url = StringUtils.format(baseUrl+"/search?searchString=%s", keyword);
@@ -76,7 +67,6 @@ public class Ohmanhua extends MangaParser {
                 if (!update.contains("更新")){
                     update = node.text("dd > ul > li:eq(5)");
                 }
-                //Log.d("getSearchIterator",cid + ","+title+ "," + cover + ","+author +","+update);
                 return new Comic(TYPE, cid, title, cover,
                         update.replace("更新",""),
                         author.replace("作者",""));
@@ -101,7 +91,7 @@ public class Ohmanhua extends MangaParser {
     }
 
     @Override
-    public void parseInfo(String html, Comic comic) throws UnsupportedEncodingException {
+    public Comic parseInfo(String html, Comic comic) {
         Node body = new Node(html);
         String title = body.text("dl.fed-deta-info > dd > h1");
         String cover = body.attr("dl.fed-deta-info > dt > a","data-original");
@@ -121,18 +111,28 @@ public class Ohmanhua extends MangaParser {
         }
         boolean status = isFinish(statusStr.replace("状态",""));
 
-        //Log.d("parseInfo",status + ","+title+ "," + cover + ","+author +","+update + ","+intro);
         comic.setInfo(title, cover, update.replace("更新",""), intro, author.replace("作者",""), status);
+        return comic;
     }
 
     @Override
-    public List<Chapter> parseChapter(String html) {
+    public List<Chapter> parseChapter(String html, Comic comic) {
         List<Chapter> list = new LinkedList<>();
+        int i=0;
         for (Node node : new Node(html).list("div:not(.fed-hidden) > div.all_data_list > ul.fed-part-rows a")) {
+            Long sourceComic=null;
+            if (comic.getId() == null) {
+                sourceComic = Long.parseLong(comic.getSource() + sourceToComic + "00");
+            } else {
+                sourceComic = Long.parseLong(comic.getSource() + sourceToComic + comic.getId());
+            }
+            Long id = Long.parseLong(sourceComic+"000"+i);
+
             String title = node.attr("title");
             String path = node.href("a");
-            //Log.d("parseChapter",title+","+path);
-            list.add(new Chapter(title, path));
+
+            list.add(new Chapter(id, sourceComic, title, path));
+            i++;
         }
         return list;
     }
@@ -144,20 +144,24 @@ public class Ohmanhua extends MangaParser {
     }
 
     @Override
-    public List<ImageUrl> parseImages(String html) {
+    public List<ImageUrl> parseImages(String html, Chapter chapter) {
+
         List<ImageUrl> list = new LinkedList<>();
         String encodedData = StringUtils.match("C_DATA=\\'(.+?)\\'", html, 1);
         if (encodedData != null) {
             try {
-                String decryptKey = "JRUIFMVJDIWE569j";
+                String decryptKey = "fw12558899ertyui";
                 String decodedData  = new String(Base64.decode(encodedData, Base64.DEFAULT));
                 String decryptedData = DecryptionUtils.decryptAES(decodedData, decryptKey);
                 String imgRelativePath = StringUtils.match("imgpath:\"(.+?)\"",decryptedData,1);
                 String startImg = StringUtils.match("startimg:([0-9]+?),",decryptedData,1);
                 String totalPages = StringUtils.match("totalimg:([0-9]+?),",decryptedData,1);
-                for (int i = Integer.parseInt(startImg); i <= Integer.parseInt(totalPages); ++i) {
+                for (int i = Integer.parseInt(Objects.requireNonNull(startImg));
+                     i <= Integer.parseInt(Objects.requireNonNull(totalPages)); ++i) {
+                    Long comicChapter = chapter.getId();
+                    Long id = Long.parseLong(comicChapter + "000" + i);
                     String jpg = StringUtils.format("%04d.jpg", i);
-                    list.add(new ImageUrl(i, serverUrl + imgRelativePath + jpg, false));
+                    list.add(new ImageUrl(id, comicChapter, i, serverUrl + imgRelativePath + jpg, false));
                 }
             } catch (Exception e) {
                 e.printStackTrace();

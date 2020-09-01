@@ -1,5 +1,6 @@
 package com.hiroshi.cimoc.source;
 
+import com.google.common.collect.Lists;
 import com.hiroshi.cimoc.model.Chapter;
 import com.hiroshi.cimoc.model.Comic;
 import com.hiroshi.cimoc.model.ImageUrl;
@@ -77,7 +78,7 @@ public class GuFeng extends MangaParser {
     }
 
     @Override
-    public void parseInfo(String html, Comic comic) throws UnsupportedEncodingException {
+    public Comic parseInfo(String html, Comic comic) throws UnsupportedEncodingException {
         Node body = new Node(html);
         String cover = body.src("#Cover > mip-img");
         String intro = body.text("div.comic-view.clearfix > p");
@@ -89,17 +90,29 @@ public class GuFeng extends MangaParser {
         // 连载状态
         boolean status = isFinish("连载");
         comic.setInfo(title, cover, update, intro, author, status);
+        return comic;
     }
 
     @Override
-    public List<Chapter> parseChapter(String html) {
+    public List<Chapter> parseChapter(String html, Comic comic) {
         List<Chapter> list = new LinkedList<>();
+        int i=0;
         for (Node node : new Node(html).list("ul[id^=chapter-list] > li > a")) {
+            Long sourceComic=null;
+            if (comic.getId() == null) {
+                sourceComic = Long.parseLong(comic.getSource() + sourceToComic + "00");
+            } else {
+                sourceComic = Long.parseLong(comic.getSource() + sourceToComic + comic.getId());
+            }
+            Long id = Long.parseLong(sourceComic+"000"+i);
+
             String title = node.text();
             String path = node.hrefWithSplit(2);
-            list.add(0, new Chapter(title, path));
+
+            list.add(new Chapter(id, sourceComic, title, path));
+            i++;
         }
-        return list;
+        return Lists.reverse(list);
     }
 
     @Override
@@ -109,7 +122,7 @@ public class GuFeng extends MangaParser {
     }
 
     @Override
-    public List<ImageUrl> parseImages(String html) {
+    public List<ImageUrl> parseImages(String html, Chapter chapter) {
         List<ImageUrl> list = new LinkedList<>();
         String str = StringUtils.match("chapterImages = \\[(.*?)\\]", html, 1);
         if (str != null) {
@@ -119,8 +132,9 @@ public class GuFeng extends MangaParser {
                 for (int i = 0; i != array.length; ++i) {
                     // 去掉首末两端的双引号
                     String s = array[i].substring(1, array[i].length() - 1);
-                    // http://res.gufengmh8.com/images/comic/159/316518/1519527843Efo9qfJOY9Jb_VP4.jpg
-                    list.add(new ImageUrl(i + 1, "https://res.xiaoqinre.com/" + urlPrev + s, false));
+                    Long comicChapter = chapter.getId();
+                    Long id = Long.parseLong(comicChapter + "000" + i);
+                    list.add(new ImageUrl(id, comicChapter, i + 1, "https://res.xiaoqinre.com/" + urlPrev + s, false));
                 }
             } catch (Exception e) {
                 e.printStackTrace();

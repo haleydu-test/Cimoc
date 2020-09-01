@@ -1,5 +1,7 @@
 package com.hiroshi.cimoc.source;
 
+import android.util.Log;
+
 import com.hiroshi.cimoc.model.Chapter;
 import com.hiroshi.cimoc.model.Comic;
 import com.hiroshi.cimoc.model.ImageUrl;
@@ -7,6 +9,7 @@ import com.hiroshi.cimoc.model.Source;
 import com.hiroshi.cimoc.parser.MangaParser;
 import com.hiroshi.cimoc.parser.NodeIterator;
 import com.hiroshi.cimoc.parser.SearchIterator;
+import com.hiroshi.cimoc.parser.UrlFilter;
 import com.hiroshi.cimoc.soup.Node;
 import com.hiroshi.cimoc.utils.DecryptionUtils;
 import com.hiroshi.cimoc.utils.StringUtils;
@@ -21,20 +24,20 @@ import okhttp3.Request;
 
 /**
  * Created by ZhiWen on 2019/02/25.
- * fix by haleydu on2020/8/16
+ * fix by haleydu on2020/8/20
  */
 
-public class MHLove extends MangaParser {
+public class MH160 extends MangaParser {
 
-    public static final int TYPE = 27;
-    public static final String DEFAULT_TITLE = "漫画Love";
-    public static final String baseUrl = "http://www.php06.com";
+    public static final int TYPE = 28;
+    public static final String DEFAULT_TITLE = "漫画160";
+    private static final String baseUrl = "https://m.mh160.co";
 
     public static Source getDefaultSource() {
         return new Source(null, DEFAULT_TITLE, TYPE, false);
     }
 
-    public MHLove(Source source) {
+    public MH160(Source source) {
         init(source, null);
     }
 
@@ -46,6 +49,7 @@ public class MHLove extends MangaParser {
         String url = StringUtils.format(baseUrl+"/statics/search.aspx?key=%s", keyword);
         return new Request.Builder()
                 .addHeader("Referer", baseUrl)
+                .addHeader("Host","www.mh160.co")
                 .url(url)
                 .build();
     }
@@ -66,27 +70,41 @@ public class MHLove extends MangaParser {
     }
 
     @Override
-    public Request getInfoRequest(String cid) {
-        String url = baseUrl + cid;
-        return new Request.Builder().url(url).build();
+    public String getUrl(String cid) {
+        return baseUrl + cid;
     }
 
     @Override
-    public Comic parseInfo(String html, Comic comic) throws UnsupportedEncodingException {
+    protected void initUrlFilterList() {
+        filter.add(new UrlFilter("m.mh160.co"));
+    }
+
+    @Override
+    public Request getInfoRequest(String cid) {
+        String url = baseUrl + cid;
+        return new Request.Builder()
+                .url(url)
+                .addHeader("Referer", baseUrl)
+                .addHeader("Host","www.mh160.co")
+                .build();
+    }
+
+    @Override
+    public Comic parseInfo(String html, Comic comic) {
         Node body = new Node(html);
         String cover = body.src(".mh-date-bgpic > a > img");
         String intro = body.text("#workint > p");
         String title = body.attr(".mh-date-bgpic > a > img", "title");
-        String update = body.text("div.mh-chapter-record > span > em");
+        String update = body.text("div.cy_zhangjie_top > :eq(2) > font");
         String author = body.text("span.one > em");
-        // 连载状态
         boolean status = isFinish(body.text("p.works-info-tc > span:eq(3)"));
+
         comic.setInfo(title, cover, update, intro, author, status);
         return comic;
     }
 
     @Override
-    public List<Chapter> parseChapter(String html, Comic comic) {
+    public List<Chapter> parseChapter(String html, Comic comic)  {
         List<Chapter> list = new LinkedList<>();
         int i=0;
         for (Node node : new Node(html).list("#mh-chapter-list-ol-0 > li > a")) {
@@ -98,8 +116,9 @@ public class MHLove extends MangaParser {
             }
             Long id = Long.parseLong(sourceComic+"000"+i);
 
-            String title = node.text();
+            String title = node.text("p");
             String path = node.href();
+
             list.add(new Chapter(id, sourceComic, title, path));
             i++;
         }
@@ -109,25 +128,37 @@ public class MHLove extends MangaParser {
     @Override
     public Request getImagesRequest(String cid, String path) {
         String url = baseUrl + path;
-        return new Request.Builder().url(url).build();
+        return new Request.Builder()
+                .url(url)
+                .addHeader("Referer", baseUrl)
+                .addHeader("Host","www.mh160.co")
+                .build();
     }
 
     @Override
     public List<ImageUrl> parseImages(String html, Chapter chapter) {
         List<ImageUrl> list = new LinkedList<>();
         String str = StringUtils.match("qTcms_S_m_murl_e=\"(.*?)\"", html, 1);
+        String str_id = StringUtils.match("qTcms_S_p_id=\"(.*?)\"", html, 1);
         if (str != null) {
             try {
                 str = DecryptionUtils.base64Decrypt(str);
                 String[] array = str.split("\\$qingtiandy\\$");
                 String preUrl = "";
-                if(!array[0].contains("http")){
-                    preUrl = "http://www.9qv.cn";
+                if(Integer.parseInt(str_id)>542724){
+                    preUrl = "https://mhpic5.miyeye.cn:20208";
+                }else {
+                    preUrl = "https://res.gezhengzhongyi.cn:20207";
                 }
+                if (Integer.parseInt(str_id)>884998){
+                    preUrl = "https://mhpic88.miyeye.cn:20207";
+                }
+
                 for (int i = 0; i != array.length; ++i) {
+                    String url = preUrl + array[i];
                     Long comicChapter = chapter.getId();
                     Long id = Long.parseLong(comicChapter + "000" + i);
-                    list.add(new ImageUrl(id, comicChapter, i + 1, preUrl + array[i], false));
+                    list.add(new ImageUrl(id, comicChapter, i + 1, url, false));
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -143,13 +174,11 @@ public class MHLove extends MangaParser {
 
     @Override
     public String parseCheck(String html) {
-        // 这里表示的是更新时间
-        return new Node(html).text("div.mh-chapter-record > span > em");
+        return new Node(html).text("div.cy_zhangjie_top > :eq(2) > font");
     }
 
     @Override
     public Headers getHeader() {
-        return Headers.of("Referer", baseUrl);
+        return Headers.of("User-Agent","Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Safari/537.36");
     }
-
 }

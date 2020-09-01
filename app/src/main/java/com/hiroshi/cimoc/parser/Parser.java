@@ -52,7 +52,8 @@ public interface Parser {
      * @param html  页面源代码
      * @param comic 漫画实体类，需要设置其中的字段
      */
-    void parseInfo(String html, Comic comic) throws UnsupportedEncodingException;
+    Comic parseInfo(String html, Comic comic) throws UnsupportedEncodingException;
+
 
     /**
      * 章节列表的 HTTP 请求，若在 {@link #parseInfo} 中可以解析出章节列表，返回 null，代表不用再次解析
@@ -69,6 +70,16 @@ public interface Parser {
      * @param html 页面源代码
      */
     List<Chapter> parseChapter(String html) throws JSONException;
+
+    /**
+     * 解析章节列表，新增函数
+     *
+     *  使用了Lists.reverse(list)后要把TYPE加入interpretationUtils的isReverseOrder函数
+     *
+     * @param html 页面源代码
+     * @param comic 漫画名
+     */
+    List<Chapter> parseChapter(String html, Comic comic) throws JSONException;
 
     /**
      * 图片列表的 HTTP 请求
@@ -88,6 +99,12 @@ public interface Parser {
      */
     List<ImageUrl> parseImages(String html) throws Manga.NetworkErrorException, JSONException;
 
+    /**
+     * 新增函数
+     * @param html 页面源代码
+     * @param chapter 漫画章节
+     */
+    List<ImageUrl> parseImages(String html,Chapter chapter) throws Manga.NetworkErrorException, JSONException;
     /**
      * 图片惰性加载的 HTTP 请求
      *

@@ -32,6 +32,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.facebook.drawee.interfaces.DraweeController;
 import com.facebook.drawee.view.SimpleDraweeView;
@@ -203,9 +204,12 @@ public class MainActivity extends BaseActivity implements MainView, NavigationVi
             }
             checkUpdate();
         }
+        mPresenter.getSourceBaseUrl();
 
         showAuthorNotice();
         showPermission();
+        getMh50KeyIv();
+
     }
 
     @Override
@@ -573,6 +577,39 @@ public class MainActivity extends BaseActivity implements MainView, NavigationVi
                             MessageDialogFragment fragment = MessageDialogFragment.newInstance(R.string.main_notice,
                                     showMsg, false, DIALOG_REQUEST_NOTICE);
                             fragment.show(getFragmentManager(), null);
+                        }
+                    }
+                });
+    }
+
+    private void getMh50KeyIv() {
+        FirebaseRemoteConfig mFirebaseRemoteConfig = FirebaseRemoteConfig.getInstance();
+        FirebaseRemoteConfigSettings configSettings = new FirebaseRemoteConfigSettings.Builder()
+                .setMinimumFetchIntervalInSeconds(60*60)
+                .build();
+        mFirebaseRemoteConfig.setConfigSettingsAsync(configSettings);
+        mFirebaseRemoteConfig.setDefaultsAsync(R.xml.remote_config);
+        mFirebaseRemoteConfig.fetchAndActivate()
+                .addOnCompleteListener(this, new OnCompleteListener<Boolean>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Boolean> task) {
+                        if (task.isSuccessful()) {
+                            boolean updated = task.getResult();
+                            Log.d("FireBase_FirstOpenMsg", "Config params updated: " + updated);
+                        } else {
+                            Log.d("FireBase_FirstOpenMsg", "Config params updated Failed. ");
+                        }
+
+                        String mh50_key = mFirebaseRemoteConfig.getString("mh50_key_msg");
+                        String mh50_iv = mFirebaseRemoteConfig.getString("mh50_iv_msg");
+
+                        if (!mh50_key.equals(mPreference.getString(PreferenceManager.PREFERENCES_MH50_KEY_MSG, "KA58ZAQ321oobbG8"))){
+                            mPreference.putString(PreferenceManager.PREFERENCES_MH50_KEY_MSG, mh50_key);
+                            Toast.makeText(MainActivity.this,"漫画堆key已更新",Toast.LENGTH_LONG).show();
+                        }
+                        if (!mh50_iv.equals(mPreference.getString(PreferenceManager.PREFERENCES_MH50_IV_MSG, "A1B2C3DEF1G321o8"))){
+                            mPreference.putString(PreferenceManager.PREFERENCES_MH50_IV_MSG, mh50_iv);
+                            Toast.makeText(MainActivity.this,"漫画堆iv已更新",Toast.LENGTH_LONG).show();
                         }
                     }
                 });

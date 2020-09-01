@@ -1,7 +1,9 @@
 package com.hiroshi.cimoc.source;
 
+import android.util.Log;
 import android.util.Pair;
 
+import com.google.common.collect.Lists;
 import com.hiroshi.cimoc.model.Chapter;
 import com.hiroshi.cimoc.model.Comic;
 import com.hiroshi.cimoc.model.ImageUrl;
@@ -106,7 +108,7 @@ public class DM5 extends MangaParser {
     }
 
     @Override
-    public void parseInfo(String html, Comic comic) {
+    public Comic parseInfo(String html, Comic comic) {
         Node body = new Node(html);
         String title = body.textWithSplit("div.banner_detail_form > div.info > p.title", " ", 0);
         String cover = body.src("div.banner_detail_form > div.cover > img");
@@ -139,18 +141,30 @@ public class DM5 extends MangaParser {
         }
         boolean status = isFinish(body.text("div.banner_detail_form > div.info > p.tip > span:eq(0)"));
         comic.setInfo(title, cover, update, intro, author, status);
+        return comic;
     }
 
     @Override
-    public List<Chapter> parseChapter(String html) {
-        Set<Chapter> set = new LinkedHashSet<>();
+    public List<Chapter> parseChapter(String html, Comic comic) {
+        List<Chapter> list = new LinkedList<>();
         Node body = new Node(html);
+        int i=0;
         for (Node node : body.list("#chapterlistload > ul  li > a")) {
+            Long sourceComic=null;
+            if (comic.getId() == null) {
+                sourceComic = Long.parseLong(comic.getSource() + sourceToComic + "00");
+            } else {
+                sourceComic = Long.parseLong(comic.getSource() + sourceToComic + comic.getId());
+            }
+            Long id = Long.parseLong(sourceComic+"000"+i);
+
             String title = StringUtils.split(node.text(), " ", 0);
             String path = node.hrefWithSplit(0);
-            set.add(new Chapter(title, path));
+
+            list.add(new Chapter(id, sourceComic, title, path));
+            i++;
         }
-        return new LinkedList<>(set);
+        return Lists.reverse(list);
     }
 
     @Override
@@ -163,7 +177,7 @@ public class DM5 extends MangaParser {
     }
 
     @Override
-    public List<ImageUrl> parseImages(String html) {
+    public List<ImageUrl> parseImages(String html, Chapter chapter) {
         List<ImageUrl> list = new LinkedList<>();
         String str = StringUtils.match("eval\\(.*\\)", html, 0);
         if (str != null) {
@@ -171,7 +185,9 @@ public class DM5 extends MangaParser {
                 str = DecryptionUtils.evalDecrypt(str, "newImgs");
                 String[] array = str.split(",");
                 for (int i = 0; i != array.length; ++i) {
-                    list.add(new ImageUrl(i + 1, array[i], false));
+                    Long comicChapter = chapter.getId();
+                    Long id = Long.parseLong(comicChapter + "000" + i);
+                    list.add(new ImageUrl(id, comicChapter,i + 1, array[i], false));
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -203,7 +219,30 @@ public class DM5 extends MangaParser {
 
     @Override
     public String parseCheck(String html) {
-        return new Node(html).textWithSubstring("#mhinfo > div.innr9 > div.innr90 > div.innr92 > span:eq(9)", 5, -10);
+        Node body = new Node(html);
+        String update = body.text("#tempc > div.detail-list-title > span.s > span");
+        if (update != null) {
+            Calendar calendar = Calendar.getInstance();
+            if (update.contains("今天") || update.contains("分钟前")) {
+                update = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.getTime());
+            } else if (update.contains("昨天")) {
+                calendar.add(Calendar.DATE, -1);
+                update = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.getTime());
+            } else if (update.contains("前天")) {
+                calendar.add(Calendar.DATE, -2);
+                update = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.getTime());
+            } else {
+                String result = StringUtils.match("\\d+-\\d+-\\d+", update, 0);
+                if (result == null) {
+                    String[] rs = StringUtils.match("(\\d+)月(\\d+)号", update, 1, 2);
+                    if (rs != null) {
+                        result = calendar.get(Calendar.YEAR) + "-" + rs[0] + "-" + rs[1];
+                    }
+                }
+                update = result;
+            }
+        }
+        return update;
     }
 
     @Override

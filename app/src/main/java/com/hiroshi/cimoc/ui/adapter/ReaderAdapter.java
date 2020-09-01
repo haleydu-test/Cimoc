@@ -131,7 +131,8 @@ public class ReaderAdapter extends BaseAdapter<ImageUrl> {
         for (int i = 0; i != urls.length; ++i) {
             final String url = urls[i];
             ImageRequestBuilder imageRequestBuilder = ImageRequestBuilder
-                    .newBuilderWithSource(Uri.parse(url));
+                    .newBuilderWithSource(Uri.parse(url))
+                    .setProgressiveRenderingEnabled(true);
 
             // TODO 切图后可能需要修改图片高度和宽度
             MangaPostprocessor processor = new MangaPostprocessor(imageUrl, isPaging, isPagingReverse, isWhiteEdge);
@@ -149,7 +150,7 @@ public class ReaderAdapter extends BaseAdapter<ImageUrl> {
             });
             request[i] = imageRequestBuilder.build();
         }
-        builder.setOldController(draweeView.getController()).setTapToRetryEnabled(true);
+        builder.setOldController(draweeView.getController()).setTapToRetryEnabled(true).setRetainImageOnFailure(true);
         draweeView.setController(builder.setFirstAvailableImageRequests(request).build());
     }
 
@@ -243,20 +244,20 @@ public class ReaderAdapter extends BaseAdapter<ImageUrl> {
         return current;
     }
 
-    public int getPositionById(int id) {
+    public int getPositionById(Long id) {
         int size = mDataSet.size();
         for (int i = 0; i < size; ++i) {
-            if (mDataSet.get(i).getId() == id) {
+            if (mDataSet.get(i).getId().equals(id)) {
                 return i;
             }
         }
         return -1;
     }
 
-    public void update(int id, String url) {
+    public void update(Long id, String url) {
         for (int i = 0; i < mDataSet.size(); ++i) {
             ImageUrl imageUrl = mDataSet.get(i);
-            if (imageUrl.getId() == id && imageUrl.isLoading()) {
+            if (imageUrl.getId().equals(id) && imageUrl.isLoading()) {
                 if (url == null) {
                     imageUrl.setLoading(false);
                     return;
